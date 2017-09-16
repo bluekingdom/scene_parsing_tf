@@ -3,23 +3,32 @@
 * @File Name:   		main.py
 * @Author:				Wang Yang
 * @Created Date:		2017-09-12 20:05:27
-* @Last Modified Data:	2017-09-14 13:21:26
+* @Last Modified Data:	2017-09-16 14:57:54
 * @Desc:					
 *
 """
 
-import tensorflow as tf
+# import tensorflow as tf
 import os
+import cv2
+
+FLAGS = tf.flags.FLAGS
+tf.flags.DEFINE_integer("batch_size", "2", "batch size for training")
+tf.flags.DEFINE_integer("epoch", "10", "epoch")
+tf.flags.DEFINE_float("learning_rate", "1e-4", "Learning rate for Adam Optimizer")
+tf.flags.DEFINE_string("model_dir", "Model_zoo/", "Path to vgg model mat")
 
 class DataProvider:
 	images = {}
 	annots = {}
+	input_width = 0
+	input_height = 0
 
-	def Init(self):
-		images['training'] = []
-		images['validation'] = []
-		annots['training'] = []
-		annots['validation'] = []
+	def Init(self, input_width, input_height):
+		self.images['training'] = []
+		self.images['validation'] = []
+		self.annots['training'] = []
+		self.annots['validation'] = []
 		pass
 
 	def Init_Mit_Scene_Parse(self):
@@ -39,17 +48,60 @@ class DataProvider:
 					continue
 				self.images[phase] = train_images_root + file
 				self.annots[phase] = train_annots_root + file
+			pass
 
-
-
-
-
-
+		_load("training")
+		_load("validation")
 
 		pass
 
-	def GetBatch(self, batch_size):
+	def GetTrainBatch(self, batch_size):
+
+		len_of_images = len(self.images)
+
+		num_batches_per_epoch = len(len_of_images) // batch_size
+
+	    if (shuffle):
+	    	perm = np.arange(len_of_images)
+	        np.random.shuffle(perm)
+	        self.images = self.images[perm]
+	        self.annots = self.annots[perm]
+
+        for batch_num in range(num_batches_per_epoch):
+            start_index = batch_num * batch_size
+            end_index = min((batch_num + 1) * batch_size, data_size)
+            images = []
+            annots = []
+            for i in range(start_index, end_index + 1):
+                try:
+                	img_filename = self.images[i]
+                    img = cv2.resize(cv2.imread(img_filename), (image_width, image_height)) 
+                    if len(img.shape) < 3:
+                    	img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+                    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                    img = img.astype(np.float32) / 255.0
+                    images.append(img) 
+
+                    ant_filename = self.annots[i]
+                    img = cv2.resize(cv2.imread(ant_filename), (image_width, image_height)) 
+                    annots.append(img)
+
+                except Exception as err:
+                    print(err) 
+                    # batch = [cv2.resize(cv2.imread(d), (x_h, x_w)) for d in data[start_index:end_index]]
+
+            if len(images) == 0:
+                continue
+
+            yield np.array(images), np.array(annots)
+
+
+	def GetTestBatch(self, batch_size, image_width, image_height):
+		for i in range(batch_size):
+
+			pass
 		pass
+
 	pass
 
 
@@ -131,10 +183,41 @@ class Network:
 		        net = tf.image.resize_bilinear(net, [out_height, out_width])
 
 				predict = slim.softmax(net, scope='predictions')
+		return logits, predict
 
-		return net, predict
+	def optimal(logits, labels):
+	    loss = tf.reduce_mean((tf.nn.sparse_softmax_cross_entropy_with_logits(
+	    	logits=logits, labels=tf.squeeze(annotation, squeeze_dims=[3]), name="entropy")))
+	    optimizer = tf.train.AdamOptimizer(FLAGS.learning_rate).minimize(loss)
+	    return optimizer, loss
 
 	def train():
+		image_width = 300
+		image_width = 300
+		channels = 3
+		images = tf.placeholder("float", [None, image_height, image_width, channels])
+		labels = tf.placeholder("float", [None, image_height, image_width, channels])
+
+		logits, predict = self.inference(images)
+		optimizer, loss = self.optimal(logits, labels)
+
+        train_batch_idx = 0
+
+		with tf.Session as sess:
+			tf.global_variables_initializer().run()
+
+			for epoch_idx in range(FLAGS.epoch):
+				train_batches = self.GetTrainBatch(image_width, image_height)
+				for batch in train_batches:
+					l = sess.run([loss, optimizer], feed_dict={images: batch, labels: })
+				print('iter idx: %5d, train loss: %0.5f' % (train_batch_idx, l))
+				train_batch_idx += 1
+				pass
+
+			pass
 		pass
 
 	pass
+
+if __name__ == '__main__':
+	train()
